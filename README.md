@@ -53,6 +53,30 @@ It asks the agent to:
 5. execute only after confirmation
 6. verify the result
 
+## Workflow Overview
+
+```mermaid
+flowchart TD
+    A["Bootstrap Gate"] --> B{"Environment Ready?"}
+    B -- "No" --> C["Ask Human For Credentials / Decisions"]
+    C --> B
+    B -- "Yes" --> D["Route Task"]
+
+    D --> E["Type 1<br/>One-time acquisition"]
+    D --> F["Type 2<br/>Tracking initialization"]
+    D --> G["Type 3<br/>Scheduled monitoring"]
+
+    E --> H["Search -> Evidence -> Confirm -> Transfer -> Verify"]
+    F --> I["Search -> Transfer -> Update DB -> Verify"]
+    G --> J["Sync DB -> Check Missing -> Search -> Transfer -> Mark Obtained"]
+
+    H --> K["Guardrails"]
+    I --> K
+    J --> K
+
+    K["No glue scripts<br/>No dangerous flatten targets<br/>No recursive protected scans<br/>Verification after side effects"]
+```
+
 ## Task Types
 
 The workflow is split into three task types.
