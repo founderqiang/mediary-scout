@@ -102,6 +102,24 @@ Type 1 focuses on:
 
 No long-term tracking is created.
 
+### Example: Type 1 Run
+
+Below is a real successful Type 1 run from an OpenClaw agent session.
+
+| Step | Action | Result |
+| --- | --- | --- |
+| Step 1 | TMDB search | `索命哨` -> `id=1193501`, `2026-01-20` |
+| Step 2 | TV details | skipped (movie) |
+| Step 3 | PanSou search | `2 magnet`, `2 115` |
+| Step 4 | Extract + decide | selected 1 resource (`1080p`, `HD`, Chinese subtitles) |
+| Step 5 | Create directory | `索命哨 (2026)` -> `CID=3396955626360799086` |
+| Step 7 | Transfer | success |
+| Step 8 | Flatten | `moved=1`, `removed=1` |
+| Step 9 | File validation | no duplicates |
+| Step 10 | Final verification | `1` video file (`~2.7GB`) |
+
+This is the intended shape of a successful Type 1 execution: evidence-first selection, explicit transfer, post-transfer cleanup, and a final verification pass.
+
 ### Type 2: Tracking Initialization
 
 Use Type 2 when the target cannot be cleanly finished in one shot.
