@@ -123,11 +123,11 @@ class Pan115Client:
         """
         result = dict(item)
         if "n" in result:
-            result["name"] = result.pop("n")
+            result["name"] = result["n"]
         if "s" in result:
-            result["size"] = result.pop("s")
+            result["size"] = result["s"]
         if "cid" in result:
-            result["dir_id"] = result.pop("cid")
+            result["dir_id"] = result["cid"]
         return result
 
     @staticmethod

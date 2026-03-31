@@ -221,6 +221,16 @@ class Pan115ClientFieldNormalizationTests(unittest.TestCase):
         self.assertEqual(files[0]["name"], "episode01.mkv")
         self.assertEqual(files[0]["size"], "1000")
 
+    def test_list_files_preserves_raw_keys_for_backward_compatibility(self):
+        pan115_client = load_pan115_module(self)
+        with patch.dict(os.environ, {"PAN115_COOKIE": "env-cookie"}, clear=True):
+            with patch.object(pan115_client, "P115Client", FakeP115ClientWithFiles):
+                client = pan115_client.Pan115Client()
+        client._min_interval = 0
+        files = client.list_files(cid="root", depth=1)
+        self.assertEqual(files[0]["n"], "Season 1")
+        self.assertEqual(files[0]["cid"], "season-1")
+
 
 class Pan115ClientConfigTests(unittest.TestCase):
     def test_explicit_cookie_takes_priority(self):
