@@ -1144,6 +1144,17 @@ to candidates from persisted resource snapshots. A later SQLite or Postgres
 adapter should satisfy the same contract rather than re-implementing workflow
 rules in route handlers or UI components.
 
+The workflow runner is the adapter between side effects and durable state.
+
+The core workflow functions perform typed workflow steps and return facts:
+episode state, resource snapshots, agent decisions, transfer attempts,
+notifications, and audit events. A thin runner should pass a concrete workflow
+run id into those steps, then persist the returned result through the repository
+contract. This keeps route handlers and future queue jobs from hand-building
+database records differently. It also makes no-op Type 3 runs explicit: when
+storage is already current, the persisted run has no resource snapshots or
+transfer attempts, but still records the verified episode state and notification.
+
 The first concrete adapter can be SQLite.
 
 For local development, tests, and a single-machine worker, SQLite is enough to

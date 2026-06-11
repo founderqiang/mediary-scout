@@ -7,6 +7,7 @@ import {
   type EpisodeState,
   type MediaTitle,
   type NotificationEvent,
+  type ResourceSnapshot,
   type TrackedSeason,
   type TransferAttempt,
   type WorkflowStatus,
@@ -22,6 +23,7 @@ export interface WorkflowResult {
   episodes: EpisodeState[];
   obtainedEpisodes: string[];
   providerAheadEpisodes: string[];
+  resourceSnapshots: ResourceSnapshot[];
   transferAttempts: TransferAttempt[];
   decisions: AgentDecision[];
   notification: NotificationEvent;
@@ -36,7 +38,9 @@ export async function runType2Initialization(input: {
   resourceProvider: ResourceProvider;
   storage: StorageExecutor;
   agents: AgentNodes;
+  workflowRunId?: string;
 }): Promise<WorkflowResult> {
+  const workflowRunId = input.workflowRunId ?? TYPE2_WORKFLOW_RUN_ID;
   const episodes = createEpisodeStates({
     trackedSeasonId: input.season.id,
     seasonNumber: input.season.seasonNumber,
@@ -71,7 +75,7 @@ export async function runType2Initialization(input: {
   for (const candidateId of decision.selectedCandidateIds) {
     transferAttempts.push(
       await input.storage.transfer({
-        workflowRunId: TYPE2_WORKFLOW_RUN_ID,
+        workflowRunId,
         directoryId: input.season.storageDirectoryId,
         candidateId,
       }),
@@ -93,8 +97,8 @@ export async function runType2Initialization(input: {
     .map((episode) => episode.episodeCode);
   const providerAheadEpisodes = collectProviderAheadEpisodes(reconciledEpisodes);
   const notification: NotificationEvent = {
-    id: "notification_run_type2",
-    workflowRunId: TYPE2_WORKFLOW_RUN_ID,
+    id: `notification_${workflowRunId}`,
+    workflowRunId,
     kind: "tracking_initialized",
     title: `${input.title.title} tracking initialized`,
     body: `${obtainedEpisodes.length} episodes obtained`,
@@ -106,6 +110,7 @@ export async function runType2Initialization(input: {
     episodes: reconciledEpisodes,
     obtainedEpisodes,
     providerAheadEpisodes,
+    resourceSnapshots: [snapshot],
     transferAttempts,
     decisions: [decision],
     notification,
@@ -122,7 +127,9 @@ export async function runType3Monitoring(input: {
   resourceProvider: ResourceProvider;
   storage: StorageExecutor;
   agents: AgentNodes;
+  workflowRunId?: string;
 }): Promise<WorkflowResult> {
+  const workflowRunId = input.workflowRunId ?? TYPE3_WORKFLOW_RUN_ID;
   const auditEvents: AuditEvent[] = [];
   const currentFiles = await input.storage.listVideoFiles(input.season.storageDirectoryId);
   let episodes = reconcileVerifiedFiles({
@@ -143,8 +150,8 @@ export async function runType3Monitoring(input: {
 
   if (actionableMissing.length === 0) {
     const notification: NotificationEvent = {
-      id: "notification_run_type3_noop",
-      workflowRunId: TYPE3_WORKFLOW_RUN_ID,
+      id: `notification_${workflowRunId}_noop`,
+      workflowRunId,
       kind: "already_current",
       title: `${input.title.title} already current`,
       body: "0 episodes restored",
@@ -155,6 +162,7 @@ export async function runType3Monitoring(input: {
       episodes,
       obtainedEpisodes: episodes.filter((episode) => episode.obtained).map((episode) => episode.episodeCode),
       providerAheadEpisodes: collectProviderAheadEpisodes(episodes),
+      resourceSnapshots: [],
       transferAttempts: [],
       decisions: [],
       notification,
@@ -188,7 +196,7 @@ export async function runType3Monitoring(input: {
   for (const candidateId of decision.selectedCandidateIds) {
     transferAttempts.push(
       await input.storage.transfer({
-        workflowRunId: TYPE3_WORKFLOW_RUN_ID,
+        workflowRunId,
         directoryId: input.season.storageDirectoryId,
         candidateId,
       }),
@@ -214,7 +222,7 @@ export async function runType3Monitoring(input: {
 
     transferAttempts.push(
       await input.storage.transfer({
-        workflowRunId: TYPE3_WORKFLOW_RUN_ID,
+        workflowRunId,
         directoryId: input.season.storageDirectoryId,
         candidateId: candidate.id,
       }),
@@ -236,8 +244,8 @@ export async function runType3Monitoring(input: {
   const obtainedEpisodes = episodes.filter((episode) => episode.obtained).map((episode) => episode.episodeCode);
   const providerAheadEpisodes = collectProviderAheadEpisodes(episodes);
   const notification: NotificationEvent = {
-    id: "notification_run_type3",
-    workflowRunId: TYPE3_WORKFLOW_RUN_ID,
+    id: `notification_${workflowRunId}`,
+    workflowRunId,
     kind: "episodes_restored",
     title: `${input.title.title} episodes restored`,
     body: `${restored.size} episodes restored`,
@@ -249,6 +257,7 @@ export async function runType3Monitoring(input: {
     episodes,
     obtainedEpisodes,
     providerAheadEpisodes,
+    resourceSnapshots: [snapshot],
     transferAttempts,
     decisions: [decision],
     notification,
