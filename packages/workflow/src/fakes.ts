@@ -102,9 +102,9 @@ export class FakeStorageExecutor implements StorageExecutor {
   async transfer(input: {
     workflowRunId: string;
     directoryId: string;
-    candidateId: string;
+    candidate: ResourceCandidate;
   }): Promise<TransferAttempt> {
-    const outcome = this.transferOutcomes[input.candidateId] ?? {
+    const outcome = this.transferOutcomes[input.candidate.id] ?? {
       status: "failed",
       providerMessage: "no fake transfer outcome configured",
       files: [],
@@ -119,7 +119,7 @@ export class FakeStorageExecutor implements StorageExecutor {
     const attempt: TransferAttempt = {
       id: `transfer_${this.nextTransferNumber}`,
       workflowRunId: input.workflowRunId,
-      candidateId: input.candidateId,
+      candidateId: input.candidate.id,
       status: outcome.status,
       providerMessage: outcome.providerMessage,
       materializedFileIds,

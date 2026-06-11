@@ -16,7 +16,7 @@ export interface StorageExecutor {
   transfer(input: {
     workflowRunId: string;
     directoryId: string;
-    candidateId: string;
+    candidate: ResourceCandidate;
   }): Promise<TransferAttempt>;
   flattenDirectory(directoryId: string): Promise<{ moved: string[]; removed: string[] }>;
   deleteFiles(input: { directoryId: string; fileIds: string[] }): Promise<{ deleted: string[] }>;

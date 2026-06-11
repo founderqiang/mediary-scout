@@ -7,6 +7,7 @@ import {
   type EpisodeState,
   type MediaTitle,
   type NotificationEvent,
+  type ResourceCandidate,
   type ResourceSnapshot,
   type TrackedSeason,
   type TransferAttempt,
@@ -73,11 +74,12 @@ export async function runType2Initialization(input: {
   assertDecisionUsesSnapshot(decision, snapshot.candidates, snapshot.id);
   const transferAttempts: TransferAttempt[] = [];
   for (const candidateId of decision.selectedCandidateIds) {
+    const candidate = requireCandidate(snapshot.candidates, candidateId);
     transferAttempts.push(
       await input.storage.transfer({
         workflowRunId,
         directoryId: input.season.storageDirectoryId,
-        candidateId,
+        candidate,
       }),
     );
   }
@@ -194,11 +196,12 @@ export async function runType3Monitoring(input: {
   const restored = new Set<string>();
 
   for (const candidateId of decision.selectedCandidateIds) {
+    const candidate = requireCandidate(snapshot.candidates, candidateId);
     transferAttempts.push(
       await input.storage.transfer({
         workflowRunId,
         directoryId: input.season.storageDirectoryId,
-        candidateId,
+        candidate,
       }),
     );
     addRestoredEpisodes(
@@ -224,7 +227,7 @@ export async function runType3Monitoring(input: {
       await input.storage.transfer({
         workflowRunId,
         directoryId: input.season.storageDirectoryId,
-        candidateId: candidate.id,
+        candidate,
       }),
     );
     addRestoredEpisodes(
@@ -278,6 +281,14 @@ function collectProviderAheadEpisodes(episodes: EpisodeState[]): string[] {
   return episodes
     .filter((episode) => episode.obtained && episode.metadataStatus === "provider_ahead")
     .map((episode) => episode.episodeCode);
+}
+
+function requireCandidate(candidates: ResourceCandidate[], candidateId: string): ResourceCandidate {
+  const candidate = candidates.find((item) => item.id === candidateId);
+  if (!candidate) {
+    throw new Error(`Candidate ${candidateId} was not found in the current resource snapshot`);
+  }
+  return candidate;
 }
 
 function assertDecisionUsesSnapshot(

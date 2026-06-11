@@ -6,6 +6,7 @@ import {
   FakeResourceProvider,
   FakeStorageExecutor,
   reconcileVerifiedFiles,
+  type ResourceCandidate,
   type TrackedSeason,
   type VerifiedFile,
 } from "../src/index.js";
@@ -221,7 +222,7 @@ describe("fake adapters", () => {
     const attempt = await storage.transfer({
       workflowRunId: "run_1",
       directoryId: "dir_1",
-      candidateId: "candidate_1",
+      candidate: candidateFixture("candidate_1"),
     });
     const files = await storage.listVideoFiles("dir_1");
 
@@ -262,7 +263,7 @@ describe("fake adapters", () => {
     await storage.transfer({
       workflowRunId: "run_1",
       directoryId: "dir_1",
-      candidateId: "candidate_1",
+      candidate: candidateFixture("candidate_1"),
     });
     const files = await storage.listVideoFiles("dir_1");
 
@@ -320,3 +321,20 @@ describe("fake adapters", () => {
     expect(decision.providerAheadEpisodeMapping).toEqual({});
   });
 });
+
+function candidateFixture(id: string): ResourceCandidate {
+  return {
+    id,
+    snapshotId: "snapshot_1",
+    index: 0,
+    title: "Show S01E01 4K",
+    type: "115",
+    source: "test",
+    episodeHints: ["S01E01"],
+    qualityHints: ["4K"],
+    providerPayload: {
+      url: "https://115.com/s/example",
+      rawType: "115",
+    },
+  };
+}

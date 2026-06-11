@@ -396,6 +396,11 @@ The important thing is preserving the invariant:
 > transferred resources often land nested, so the workflow must flatten only the
 > safe final landing directory and verify the resulting video files.
 
+Transfer execution should also bind to the selected `ResourceCandidate` from the
+current persisted resource snapshot. The executor needs the candidate payload
+(`url`, `rawType`, password, provider metadata) as its source of truth; it should
+not re-search PanSou or execute by a stale result index.
+
 This distinction keeps the product from being trapped by the shape of the
 current agent skill.
 

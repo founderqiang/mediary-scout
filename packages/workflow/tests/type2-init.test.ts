@@ -5,7 +5,10 @@ import {
   FakeStorageExecutor,
   runType2Initialization,
   type MediaTitle,
+  type ResourceCandidate,
+  type StorageExecutor,
   type TrackedSeason,
+  type TransferAttempt,
 } from "../src/index.js";
 
 describe("runType2Initialization", () => {
@@ -166,4 +169,102 @@ describe("runType2Initialization", () => {
       metadataStatus: "confirmed",
     });
   });
+
+  it("passes the selected resource candidate payload to storage transfer", async () => {
+    const title: MediaTitle = {
+      id: "title_show",
+      tmdbId: 1,
+      type: "tv",
+      title: "Show",
+      originalTitle: "Show",
+      year: 2026,
+      aliases: [],
+    };
+    const season: TrackedSeason = {
+      id: "season_show_1",
+      mediaTitleId: title.id,
+      seasonNumber: 1,
+      status: "active",
+      qualityPreference: "4K",
+      storageDirectoryId: "dir_show_s1",
+      totalEpisodes: 1,
+      latestAiredEpisode: 1,
+      latestAiredSource: "metadata",
+    };
+    const storage = new RecordingCandidateStorage();
+
+    await runType2Initialization({
+      title,
+      season,
+      keyword: "Show 4K",
+      resourceProvider: new FakeResourceProvider({
+        keywordResults: {
+          "Show 4K": [
+            {
+              title: "Show S01E01 4K",
+              episodeHints: ["S01E01"],
+              qualityHints: ["4K"],
+              providerPayload: {
+                url: "https://115.com/s/abc123?password=pw",
+                rawType: "115",
+                password: "pw",
+              },
+            },
+          ],
+        },
+      }),
+      storage,
+      agents: new FakeAgentNodes(),
+      workflowRunId: "run_candidate_payload",
+    });
+
+    expect(storage.transfers[0]?.candidate).toMatchObject({
+      id: "snapshot_1_candidate_1",
+      providerPayload: {
+        url: "https://115.com/s/abc123?password=pw",
+        rawType: "115",
+        password: "pw",
+      },
+    });
+  });
 });
+
+class RecordingCandidateStorage implements StorageExecutor {
+  readonly transfers: Array<{
+    workflowRunId: string;
+    directoryId: string;
+    candidate: ResourceCandidate;
+  }> = [];
+
+  async createDirectory(): Promise<string> {
+    return "dir_created";
+  }
+
+  async listVideoFiles() {
+    return [];
+  }
+
+  async transfer(input: {
+    workflowRunId: string;
+    directoryId: string;
+    candidate: ResourceCandidate;
+  }): Promise<TransferAttempt> {
+    this.transfers.push(input);
+    return {
+      id: "transfer_1",
+      workflowRunId: input.workflowRunId,
+      candidateId: input.candidate.id,
+      status: "succeeded",
+      providerMessage: "",
+      materializedFileIds: [],
+    };
+  }
+
+  async flattenDirectory(): Promise<{ moved: string[]; removed: string[] }> {
+    return { moved: [], removed: [] };
+  }
+
+  async deleteFiles(): Promise<{ deleted: string[] }> {
+    return { deleted: [] };
+  }
+}
