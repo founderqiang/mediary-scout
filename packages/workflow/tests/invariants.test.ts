@@ -2,6 +2,9 @@ import { describe, expect, it } from "vitest";
 import {
   createEpisodeStates,
   episodeCode,
+  FakeAgentNodes,
+  FakeResourceProvider,
+  FakeStorageExecutor,
   reconcileVerifiedFiles,
   type TrackedSeason,
   type VerifiedFile,
@@ -165,5 +168,71 @@ describe("episode state semantics", () => {
   it("formats episode codes consistently", () => {
     expect(episodeCode(1, 1)).toBe("S01E01");
     expect(episodeCode(12, 34)).toBe("S12E34");
+  });
+});
+
+describe("fake adapters", () => {
+  it("keeps resource candidate ordering stable in snapshots", async () => {
+    const provider = new FakeResourceProvider({
+      keywordResults: {
+        "翘楚 4K": [
+          { title: "翘楚 S01E13 4K", episodeHints: ["S01E13"] },
+          { title: "翘楚 S01E14 4K", episodeHints: ["S01E14"] },
+        ],
+      },
+    });
+
+    const snapshot = await provider.search({ keyword: "翘楚 4K" });
+
+    expect(snapshot.candidates.map((candidate) => candidate.index)).toEqual([0, 1]);
+    expect(snapshot.candidates.map((candidate) => candidate.episodeHints)).toEqual([["S01E13"], ["S01E14"]]);
+  });
+
+  it("can simulate a transfer with no target directory change", async () => {
+    const storage = new FakeStorageExecutor({
+      directories: { dir_1: [] },
+      transferOutcomes: {
+        candidate_1: {
+          status: "no_target_change",
+          providerMessage: "already transferred elsewhere",
+          files: [],
+        },
+      },
+    });
+
+    const attempt = await storage.transfer({
+      workflowRunId: "run_1",
+      directoryId: "dir_1",
+      candidateId: "candidate_1",
+    });
+    const files = await storage.listVideoFiles("dir_1");
+
+    expect(attempt.status).toBe("no_target_change");
+    expect(files).toEqual([]);
+  });
+
+  it("fake agent selects candidates that cover missing episodes", async () => {
+    const agent = new FakeAgentNodes();
+    const decision = await agent.selectEpisodeCoverage({
+      snapshotId: "snapshot_1",
+      candidates: [
+        {
+          id: "candidate_1",
+          snapshotId: "snapshot_1",
+          index: 0,
+          title: "翘楚 S01E13",
+          type: "115",
+          source: "fake",
+          episodeHints: ["S01E13"],
+          qualityHints: ["4K"],
+          providerPayload: {},
+        },
+      ],
+      missingEpisodes: ["S01E13"],
+      latestAiredEpisode: 14,
+    });
+
+    expect(decision.selectedCandidateIds).toEqual(["candidate_1"]);
+    expect(decision.episodeMapping).toEqual({ candidate_1: ["S01E13"] });
   });
 });
