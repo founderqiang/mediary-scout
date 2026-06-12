@@ -630,7 +630,18 @@ describe("runType3Monitoring dedup", () => {
       keyword: "翘楚 4K",
       resourceProvider,
       storage,
-      agents: new FakeAgentNodes(),
+      agents: new FakeAgentNodes({
+        packageRecognition: {
+          node: "test_dedup_confirm",
+          fileMappings: [
+            { providerFileId: "small_e13", seasonNumber: 1, episodeNumber: 13, confidence: "high", reason: "filename" },
+            { providerFileId: "big_e13", seasonNumber: 1, episodeNumber: 13, confidence: "high", reason: "filename" },
+          ],
+          rejectedProviderFileIds: [],
+          confidence: "high",
+          reason: "both files are episode 13",
+        },
+      }),
     });
 
     expect(result.status).toBe("succeeded");

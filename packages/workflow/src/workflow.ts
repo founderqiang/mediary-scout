@@ -13,7 +13,7 @@ import {
   type VerifiedFile,
   type WorkflowStatus,
 } from "./domain.js";
-import { buildDedupPlan } from "./dedup.js";
+import { buildConfirmedDedupPlan } from "./dedup.js";
 import {
   deriveAgentDecision,
   validateAcquisitionPlan,
@@ -95,6 +95,9 @@ export async function runType2Initialization(input: {
     storage: input.storage,
     directoryId: season.storageDirectoryId,
     auditEvents,
+    title: input.title,
+    seasonNumber: season.seasonNumber,
+    agents: input.agents,
   });
   const reconciledEpisodes = reconcileVerifiedFiles({
     season,
@@ -253,6 +256,9 @@ export async function runType3Monitoring(input: {
     storage: input.storage,
     directoryId: input.season.storageDirectoryId,
     auditEvents,
+    title: input.title,
+    seasonNumber: input.season.seasonNumber,
+    agents: input.agents,
   });
   episodes = reconcileVerifiedFiles({
     season: input.season,
@@ -437,36 +443,53 @@ async function dedupeLandingDirectory(input: {
   storage: StorageExecutor;
   directoryId: string;
   auditEvents: AuditEvent[];
+  title: MediaTitle;
+  seasonNumber: number;
+  agents: AgentNodes;
 }): Promise<VerifiedFile[]> {
   const files = await input.storage.listVideoFiles(input.directoryId);
-  const plan = buildDedupPlan({ files });
+  const plan = await buildConfirmedDedupPlan({
+    title: input.title,
+    seasonNumber: input.seasonNumber,
+    files,
+    agents: input.agents,
+  });
+  if (plan.unconfirmedFileIds.length > 0) {
+    input.auditEvents.push({
+      type: "dedup_unconfirmed_kept",
+      message: `Kept ${plan.unconfirmedFileIds.length} files whose episode mapping was not agent-confirmed`,
+      data: { unconfirmedFileIds: plan.unconfirmedFileIds },
+    });
+  }
   if (plan.deleteFileIds.length === 0) {
     return files;
   }
 
   input.auditEvents.push({
     type: "dedup_plan_created",
-    message: `Deleting ${plan.deleteFileIds.length} smaller duplicate files`,
+    message: `Deleting ${plan.deleteFileIds.length} smaller duplicate files (agent-confirmed groups only)`,
     data: {
       duplicateGroups: plan.duplicateGroups,
       deleteFileIds: plan.deleteFileIds,
       keepFileIds: plan.keepFileIds,
+      unconfirmedFileIds: plan.unconfirmedFileIds,
     },
   });
   await input.storage.deleteFiles({ directoryId: input.directoryId, fileIds: plan.deleteFileIds });
 
   const filesAfter = await input.storage.listVideoFiles(input.directoryId);
-  const verification = buildDedupPlan({ files: filesAfter });
-  if (verification.deleteFileIds.length > 0) {
+  const remaining = new Set(filesAfter.map((file) => file.id));
+  const undeleted = plan.deleteFileIds.filter((fileId) => remaining.has(fileId));
+  if (undeleted.length > 0) {
     input.auditEvents.push({
       type: "dedup_verification_failed",
-      message: `Duplicates remain after deletion: ${Object.keys(verification.duplicateGroups).join(", ")}`,
-      data: { duplicateGroups: verification.duplicateGroups },
+      message: `Files scheduled for deletion still exist: ${undeleted.join(", ")}`,
+      data: { undeleted },
     });
   } else {
     input.auditEvents.push({
       type: "dedup_verified",
-      message: "One verified file per episode after deduplication",
+      message: "Agent-confirmed duplicates removed and verified by re-read",
       data: { deletedCount: plan.deleteFileIds.length },
     });
   }
