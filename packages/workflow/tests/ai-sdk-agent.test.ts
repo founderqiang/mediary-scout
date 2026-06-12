@@ -131,10 +131,9 @@ describe("VercelAiAgentNodes", () => {
     const result = await agent.planAcquisition({
       title: "Show",
       aliases: [],
-      seasonNumber: 1,
+      seasons: [{ seasonNumber: 1, totalEpisodes: 1, latestAiredEpisode: 1 }],
       qualityPreference: "4K",
       missingEpisodes: ["S01E01"],
-      latestAiredEpisode: 1,
       initialKeyword: "Show 4K",
       failureEvidence: [],
       searchResources: async () => snapshot,
@@ -163,10 +162,9 @@ describe("VercelAiAgentNodes", () => {
     const result = await agent.planAcquisition({
       title: "Show",
       aliases: [],
-      seasonNumber: 1,
+      seasons: [{ seasonNumber: 1, totalEpisodes: 1, latestAiredEpisode: 1 }],
       qualityPreference: "4K",
       missingEpisodes: ["S01E01"],
-      latestAiredEpisode: 1,
       initialKeyword: "Show 4K",
       failureEvidence: [],
       searchResources: async () => {

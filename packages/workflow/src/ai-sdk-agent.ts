@@ -83,10 +83,9 @@ export class VercelAiAgentNodes implements AgentNodes {
       input: {
         title: input.title,
         aliases: input.aliases,
-        seasonNumber: input.seasonNumber,
+        seasons: input.seasons,
         qualityPreference: input.qualityPreference,
         missingEpisodes: input.missingEpisodes,
-        latestAiredEpisode: input.latestAiredEpisode,
         initialKeyword: input.initialKeyword,
         failureEvidence: input.failureEvidence,
       },

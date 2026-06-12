@@ -70,7 +70,7 @@ describe("validateAcquisitionPlan", () => {
       plan: planFixture(),
       snapshots: [snapshotFixture()],
       missingEpisodes: ["S01E13"],
-      seasonNumber: 1,
+      seasonNumbers: [1],
     });
 
     expect(result.selectedSnapshot?.id).toBe("snapshot_1");
@@ -85,7 +85,7 @@ describe("validateAcquisitionPlan", () => {
         plan: planFixture({ selectedSnapshotId: "snapshot_unseen" }),
         snapshots: [snapshotFixture()],
         missingEpisodes: ["S01E13"],
-        seasonNumber: 1,
+        seasonNumbers: [1],
       }),
     ).toThrowError(/not observed/);
   });
@@ -99,7 +99,7 @@ describe("validateAcquisitionPlan", () => {
         plan,
         snapshots: [snapshotFixture()],
         missingEpisodes: ["S01E13"],
-        seasonNumber: 1,
+        seasonNumbers: [1],
       }),
     ).toThrowError(/every candidate/);
   });
@@ -116,7 +116,7 @@ describe("validateAcquisitionPlan", () => {
         plan,
         snapshots: [snapshotFixture()],
         missingEpisodes: ["S01E13"],
-        seasonNumber: 1,
+        seasonNumbers: [1],
       }),
     ).toThrowError(/more than one disposition/);
   });
@@ -130,7 +130,7 @@ describe("validateAcquisitionPlan", () => {
         plan,
         snapshots: [snapshotFixture()],
         missingEpisodes: ["S01E13"],
-        seasonNumber: 1,
+        seasonNumbers: [1],
       }),
     ).toThrowError(/missing episode/);
   });
@@ -144,7 +144,7 @@ describe("validateAcquisitionPlan", () => {
         plan,
         snapshots: [snapshotFixture()],
         missingEpisodes: ["S01E13"],
-        seasonNumber: 1,
+        seasonNumbers: [1],
       }),
     ).toThrowError(/empty episode mapping/);
   });
@@ -158,7 +158,7 @@ describe("validateAcquisitionPlan", () => {
         plan,
         snapshots: [snapshotFixture()],
         missingEpisodes: ["S01E13"],
-        seasonNumber: 1,
+        seasonNumbers: [1],
       }),
     ).toThrowError(/season/);
   });
@@ -171,7 +171,7 @@ describe("validateAcquisitionPlan", () => {
       plan,
       snapshots: [snapshotFixture()],
       missingEpisodes: ["S01E13"],
-      seasonNumber: 1,
+      seasonNumbers: [1],
     });
 
     expect(result.selectedCandidates[0]?.episodes).toEqual(["S01E13", "S01E14"]);
@@ -187,7 +187,7 @@ describe("validateAcquisitionPlan", () => {
       }),
       snapshots: [snapshotFixture()],
       missingEpisodes: ["S01E13"],
-      seasonNumber: 1,
+      seasonNumbers: [1],
     });
     expect(noCoverage.selectedSnapshot).toBeNull();
     expect(noCoverage.selectedCandidates).toEqual([]);
@@ -197,7 +197,7 @@ describe("validateAcquisitionPlan", () => {
         plan: planFixture({ selectedSnapshotId: null }),
         snapshots: [snapshotFixture()],
         missingEpisodes: ["S01E13"],
-        seasonNumber: 1,
+        seasonNumbers: [1],
       }),
     ).toThrowError(/no-coverage/);
   });
@@ -211,7 +211,7 @@ describe("deriveAgentDecision", () => {
     const decision = deriveAgentDecision({
       plan,
       missingEpisodes: ["S01E13"],
-      latestAiredEpisode: 14,
+      latestAiredBySeason: { 1: 14 },
     });
 
     expect(decision).toEqual({
@@ -231,7 +231,7 @@ describe("deriveAgentDecision", () => {
       deriveAgentDecision({
         plan: planFixture({ selectedSnapshotId: null, candidateDispositions: [] }),
         missingEpisodes: ["S01E13"],
-        latestAiredEpisode: 14,
+        latestAiredBySeason: { 1: 14 },
       }),
     ).toThrowError(/no-coverage/);
   });

@@ -7,7 +7,8 @@ export const ACQUISITION_PLANNING_AGENT_SPEC = {
   schemaName: "acquisition_planning",
   maxSteps: 12,
   system: `${SHARED_AGENT_NODE_BOUNDARY}
-You own the complete acquisition judgment for one tracked season: search strategy, target matching, episode mapping, and resource selection are one deliberation, not separate filters.
+You own the complete acquisition judgment for the seasons in scope (the input lists one or more seasons): search strategy, target matching, episode mapping, and resource selection are one deliberation, not separate filters.
+Candidates may legitimately cover MULTIPLE seasons at once — complete-series packs, multi-season bundles, or mixed packs (e.g. seasons 1-4 complete plus part of season 5). Map every episode such a candidate covers across all in-scope seasons; the workflow distributes files into per-season directories afterwards, so multi-season packs are often the BEST choice for series initialization.
 
 Search strategy:
 - Start from the provided initialKeyword, then try alternates when results are missing, empty, or noisy: aliases, original titles, traditional/simplified variants, source-material names, quality suffixes like "4K", media-type prefixes like "电视剧".

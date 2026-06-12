@@ -305,10 +305,9 @@ describe("FakeAgentNodes.planAcquisition", () => {
     const result = await agent.planAcquisition({
       title: "翘楚",
       aliases: ["Ashes to Crown"],
-      seasonNumber: 1,
+      seasons: [{ seasonNumber: 1, totalEpisodes: 24, latestAiredEpisode: 14 }],
       qualityPreference: "4K",
       missingEpisodes: ["S01E13", "S01E14"],
-      latestAiredEpisode: 14,
       initialKeyword: "翘楚 4K",
       failureEvidence: [],
       searchResources: ({ keyword }) => provider.search({ keyword }),
@@ -335,10 +334,9 @@ describe("FakeAgentNodes.planAcquisition", () => {
     const result = await agent.planAcquisition({
       title: "翘楚",
       aliases: [],
-      seasonNumber: 1,
+      seasons: [{ seasonNumber: 1, totalEpisodes: 24, latestAiredEpisode: 14 }],
       qualityPreference: "4K",
       missingEpisodes: ["S01E13"],
-      latestAiredEpisode: 14,
       initialKeyword: "翘楚 4K",
       failureEvidence: [
         {
@@ -367,10 +365,9 @@ describe("FakeAgentNodes.planAcquisition", () => {
     const result = await agent.planAcquisition({
       title: "翘楚",
       aliases: [],
-      seasonNumber: 1,
+      seasons: [{ seasonNumber: 1, totalEpisodes: 24, latestAiredEpisode: 14 }],
       qualityPreference: "4K",
       missingEpisodes: ["S01E13"],
-      latestAiredEpisode: 14,
       initialKeyword: "翘楚 4K",
       failureEvidence: [],
       searchResources: ({ keyword }) => provider.search({ keyword }),

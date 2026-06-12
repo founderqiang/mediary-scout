@@ -30,7 +30,7 @@ export function validateAcquisitionPlan(input: {
   plan: AcquisitionPlan;
   snapshots: ResourceSnapshot[];
   missingEpisodes: string[];
-  seasonNumber: number;
+  seasonNumbers: number[];
 }): ValidatedAcquisitionPlan {
   const { plan } = input;
   const observedCandidates = new Map<string, ResourceCandidate>();
@@ -95,11 +95,12 @@ export function validateAcquisitionPlan(input: {
     if (disposition.episodes.length === 0) {
       throw new Error(`Selected candidate ${candidate.id} has an empty episode mapping`);
     }
+    const allowedSeasons = new Set(input.seasonNumbers);
     for (const code of disposition.episodes) {
       const parts = episodePartsFromCode(code);
-      if (parts.seasonNumber !== input.seasonNumber) {
+      if (!allowedSeasons.has(parts.seasonNumber)) {
         throw new Error(
-          `Selected candidate ${candidate.id} maps episode ${code} from a different season than season ${input.seasonNumber}`,
+          `Selected candidate ${candidate.id} maps episode ${code} outside the seasons in scope (${input.seasonNumbers.join(", ")})`,
         );
       }
     }
@@ -117,7 +118,8 @@ export function validateAcquisitionPlan(input: {
 export function deriveAgentDecision(input: {
   plan: AcquisitionPlan;
   missingEpisodes: string[];
-  latestAiredEpisode: number;
+  /** seasonNumber -> latest aired episode, for provider-ahead classification. */
+  latestAiredBySeason: Record<number, number>;
 }): AgentDecision {
   const { plan } = input;
   if (plan.selectedSnapshotId === null) {
@@ -132,9 +134,11 @@ export function deriveAgentDecision(input: {
     if (missingCovered.length > 0) {
       episodeMapping[disposition.candidateId] = missingCovered;
     }
-    const providerAhead = disposition.episodes.filter(
-      (code) => episodePartsFromCode(code).episodeNumber > input.latestAiredEpisode,
-    );
+    const providerAhead = disposition.episodes.filter((code) => {
+      const parts = episodePartsFromCode(code);
+      const latestAired = input.latestAiredBySeason[parts.seasonNumber];
+      return latestAired !== undefined && parts.episodeNumber > latestAired;
+    });
     if (providerAhead.length > 0) {
       providerAheadEpisodeMapping[disposition.candidateId] = providerAhead;
     }

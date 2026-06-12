@@ -352,10 +352,15 @@ async function acquireMissingEpisodes(input: {
     const planning = await input.agents.planAcquisition({
       title: input.title.title,
       aliases: input.title.aliases,
-      seasonNumber: input.season.seasonNumber,
+      seasons: [
+        {
+          seasonNumber: input.season.seasonNumber,
+          totalEpisodes: input.season.totalEpisodes,
+          latestAiredEpisode: input.season.latestAiredEpisode,
+        },
+      ],
       qualityPreference: input.season.qualityPreference,
       missingEpisodes: stillMissing,
-      latestAiredEpisode: input.season.latestAiredEpisode,
       initialKeyword: input.keyword,
       failureEvidence,
       searchResources: async ({ keyword }) => input.resourceProvider.search({ keyword }),
@@ -367,7 +372,7 @@ async function acquireMissingEpisodes(input: {
       plan: planning.plan,
       snapshots: planning.snapshots,
       missingEpisodes: stillMissing,
-      seasonNumber: input.season.seasonNumber,
+      seasonNumbers: [input.season.seasonNumber],
     });
 
     if (validated.selectedSnapshot === null || validated.selectedCandidates.length === 0) {
@@ -397,7 +402,7 @@ async function acquireMissingEpisodes(input: {
       deriveAgentDecision({
         plan: planning.plan,
         missingEpisodes: stillMissing,
-        latestAiredEpisode: input.season.latestAiredEpisode,
+        latestAiredBySeason: { [input.season.seasonNumber]: input.season.latestAiredEpisode },
       }),
     );
 

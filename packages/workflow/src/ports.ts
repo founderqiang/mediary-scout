@@ -33,13 +33,19 @@ export interface StorageExecutor {
   moveFiles(input: { fileIds: string[]; targetDirectoryId: string }): Promise<{ moved: string[] }>;
 }
 
+export interface AcquisitionSeasonContext {
+  seasonNumber: number;
+  totalEpisodes: number;
+  latestAiredEpisode: number;
+}
+
 export interface AcquisitionPlanningInput {
   title: string;
   aliases: string[];
-  seasonNumber: number;
+  /** Seasons in scope for this acquisition; single-element for Type 2/3. */
+  seasons: AcquisitionSeasonContext[];
   qualityPreference: string;
   missingEpisodes: string[];
-  latestAiredEpisode: number;
   initialKeyword: string;
   failureEvidence: AcquisitionFailureEvidence[];
   searchResources(input: { keyword: string }): Promise<ResourceSnapshot>;

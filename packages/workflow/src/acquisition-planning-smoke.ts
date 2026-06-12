@@ -23,6 +23,7 @@ export async function runAcquisitionPlanningSmoke(input: {
   title: string;
   aliases: string[];
   seasonNumber: number;
+  totalEpisodes?: number;
   qualityPreference: string;
   missingEpisodes: string[];
   latestAiredEpisode: number;
@@ -34,10 +35,15 @@ export async function runAcquisitionPlanningSmoke(input: {
     const planning = await input.agents.planAcquisition({
       title: input.title,
       aliases: input.aliases,
-      seasonNumber: input.seasonNumber,
+      seasons: [
+        {
+          seasonNumber: input.seasonNumber,
+          totalEpisodes: input.totalEpisodes ?? Math.max(input.latestAiredEpisode, 1),
+          latestAiredEpisode: input.latestAiredEpisode,
+        },
+      ],
       qualityPreference: input.qualityPreference,
       missingEpisodes: input.missingEpisodes,
-      latestAiredEpisode: input.latestAiredEpisode,
       initialKeyword: input.initialKeyword,
       failureEvidence: [],
       searchResources: async ({ keyword }) => input.resourceProvider.search({ keyword }),
@@ -52,7 +58,7 @@ export async function runAcquisitionPlanningSmoke(input: {
         plan: planning.plan,
         snapshots: planning.snapshots,
         missingEpisodes: input.missingEpisodes,
-        seasonNumber: input.seasonNumber,
+        seasonNumbers: [input.seasonNumber],
       });
       return {
         status: "plan_valid",
