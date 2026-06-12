@@ -46,10 +46,16 @@ let fakeResourceProvider: ResourceProvider | null = null;
 let fakeStorageExecutor: StorageExecutor | null = null;
 let agentNodes: { adapter: "fake" | "vercel-ai"; nodes: AgentNodes } | null = null;
 
+export function getWebDatabase(): DatabaseSync {
+  if (!database) {
+    database = new DatabaseSync(webDatabasePath());
+  }
+  return database;
+}
+
 export function getWorkflowRepository(): SQLiteWorkflowRepository {
   if (!repository) {
-    database = new DatabaseSync(webDatabasePath());
-    repository = new SQLiteWorkflowRepository(database);
+    repository = new SQLiteWorkflowRepository(getWebDatabase());
   }
   return repository;
 }
