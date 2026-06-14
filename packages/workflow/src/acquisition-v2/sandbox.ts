@@ -138,4 +138,29 @@ export class TaskSandbox {
       staging: await this.storage.listTree({ directoryId: this.stagingDirectoryId }),
     };
   }
+
+  /** Delete agent-chosen files from a named scoped directory (the dedup
+   *  keep-larger execution, or residue cleanup). Scope guard: every id must
+   *  currently be in that directory — no deleting arbitrary/raw ids. Rereads. */
+  async deleteFiles(input: {
+    directory: "staging" | "season";
+    fileIds: string[];
+  }): Promise<{ deleted: string[]; directory: SimTreeFile[] }> {
+    if (!this.storage) {
+      throw new Error("SANDBOX: no storage configured");
+    }
+    const directoryId = input.directory === "season" ? this.targetSeasonDirectoryId : this.stagingDirectoryId;
+    if (!directoryId) {
+      throw new Error(`SANDBOX: no ${input.directory} handle configured`);
+    }
+    const present = new Set(
+      (await this.storage.listTree({ directoryId })).map((file) => file.id),
+    );
+    const outOfScope = input.fileIds.filter((fileId) => !present.has(fileId));
+    if (outOfScope.length > 0) {
+      throw new Error(`SANDBOX_FILES_NOT_IN_${input.directory.toUpperCase()}: ${outOfScope.join(",")}`);
+    }
+    const { deleted } = await this.storage.deleteFiles({ fileIds: input.fileIds });
+    return { deleted, directory: await this.storage.listTree({ directoryId }) };
+  }
 }
