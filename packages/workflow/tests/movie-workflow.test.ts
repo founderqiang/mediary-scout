@@ -121,7 +121,7 @@ describe("runMovieAcquisition", () => {
     expect(landed.map((f) => f.name)).toEqual(["Oppenheimer.2023.2160p.mkv"]);
   });
 
-  it("degrades to the largest file (not abort) when master-selection returns an unstaged id", async () => {
+  it("fails honestly instead of guessing by size when the agent never returns a valid master id", async () => {
     const title = movieTitle();
     const big = videoFile("big_v", "Oppenheimer.2023.2160p.mkv");
     const small = { ...videoFile("small_v", "Oppenheimer.2023.1080p.mkv"), sizeBytes: 5_000_000_000 };
@@ -131,7 +131,8 @@ describe("runMovieAcquisition", () => {
       },
     });
     const agents = new FakeAgentNodes();
-    // The agent hallucinates an id that is not among the staged videos.
+    // The agent keeps hallucinating an id not among the staged videos — even on
+    // the re-ask. The workflow must NOT silently keep the largest (mechanical).
     agents.selectMovieMasterFile = async () => ({
       node: "fake_movie_master_selection",
       keepFileId: "does-not-exist",
@@ -152,10 +153,59 @@ describe("runMovieAcquisition", () => {
       now: fixedNow,
     });
 
-    // It did NOT throw; it kept the largest staged file.
+    // No mechanical fallback: it reports no_coverage rather than landing a
+    // size-guessed master.
+    expect(result.status).toBe("no_coverage");
+    expect(result.episodes[0]?.obtained).toBe(false);
+  });
+
+  it("re-asks the agent (never a size fallback) and keeps its valid second pick", async () => {
+    const title = movieTitle();
+    // The 花絮 reel is LARGER than the feature — a size fallback would keep it.
+    const feature = { ...videoFile("feature_v", "Oppenheimer.2023.2160p.mkv"), sizeBytes: 20_000_000_000 };
+    const extra = {
+      ...videoFile("extra_v", "Oppenheimer.Behind.The.Scenes.花絮.mkv"),
+      sizeBytes: 40_000_000_000,
+    };
+    const storage = new FakeStorageExecutor({
+      transferOutcomes: {
+        snapshot_1_candidate_1: { status: "succeeded", providerMessage: "", files: [feature, extra] },
+      },
+    });
+    const agents = new FakeAgentNodes();
+    let calls = 0;
+    let sawRejectedId: string | undefined;
+    // First call hallucinates; the re-ask (with rejectedFileId set) returns the
+    // real feature — NOT the larger 花絮.
+    agents.selectMovieMasterFile = async (input) => {
+      calls += 1;
+      if (calls === 1) {
+        return { node: "fake_movie_master_selection", keepFileId: "nope", reason: "typo" };
+      }
+      sawRejectedId = input.rejectedFileId;
+      return { node: "fake_movie_master_selection", keepFileId: "feature_v", reason: "the feature" };
+    };
+
+    const result = await runMovieAcquisition({
+      title,
+      keyword: "奥本海默 4K",
+      resourceProvider: new FakeResourceProvider({
+        keywordResults: { "奥本海默 4K": [{ title: "奥本海默 2023 4K 蓝光原盘", episodeHints: [], qualityHints: ["4K"] }] },
+      }),
+      storage,
+      agents,
+      workflowRunId: "run_reask",
+      stagingParentDirectoryId: "movies_root",
+      moviesParentDirectoryId: "movies_root",
+      now: fixedNow,
+    });
+
     expect(result.status).toBe("succeeded");
+    expect(calls).toBe(2); // re-asked exactly once
+    expect(sawRejectedId).toBe("nope"); // the rejected id was fed back
     const landed = await storage.listVideoFiles(result.season.storageDirectoryId);
-    expect(landed.map((f) => f.name)).toEqual(["Oppenheimer.2023.2160p.mkv"]);
+    // Kept the agent's valid pick (the feature), not the larger extra.
+    expect(landed.map((file) => file.name)).toEqual(["Oppenheimer.2023.2160p.mkv"]);
   });
 
   it("retries the next-best candidate after a transfer fails to materialize", async () => {

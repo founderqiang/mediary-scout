@@ -110,6 +110,13 @@ export interface MovieMasterSelectionInput {
   title: string;
   year: number;
   candidates: MovieMasterSelectionCandidate[];
+  /**
+   * Set on a re-ask after the agent returned a `keepFileId` not among the
+   * candidates: the previously rejected id, so the agent picks a DIFFERENT,
+   * valid one this time instead of the workflow falling back to a mechanical
+   * (size/order) guess.
+   */
+  rejectedFileId?: string;
 }
 
 export interface MovieMasterSelectionDecision {

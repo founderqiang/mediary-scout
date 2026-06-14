@@ -19,6 +19,7 @@ Judgment rules:
 - MAIN FEATURE, not extras: reject 花絮/特典/NG/预告/menu/sample/CD/原声/making-of/deleted-scenes and trailers. A feature-length movie file is the keeper, not a short clip.
 - Among true feature candidates (e.g. duplicate versions/qualities of the same film), keep the highest quality: prefer 4K/UHD/2160p > 1080p > 720p, prefer a transparently-labeled remux/BluRay, and use size only as a secondary tiebreaker between comparable-quality features (a feature is normally the largest, but a bloated extras reel can be large too — judge by name first).
 - Decide ONLY from the provided files; keepFileId MUST be one of the given providerFileIds.
+- If a "rejectedFileId" is present in the input, your previous answer was INVALID (that id was not among the candidates) — pick a DIFFERENT id that appears EXACTLY in the candidate list this time.
 
 Output contract:
 - keepFileId: the providerFileId of the single file to keep.

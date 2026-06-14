@@ -189,7 +189,10 @@ export async function runMovieAcquisition(input: {
     const tree = await input.storage.listTree({ directoryId: stagingDirectoryId });
     const videos = tree
       .filter((file) => VIDEO_EXTENSION.test(file.path) && !/sample/i.test(file.path))
-      .sort((left, right) => right.sizeBytes - left.sizeBytes);
+      // Stable but NEUTRAL order (by path) — never by size, so the agent's
+      // judgment is not anchored to "largest" and there is no size-ranked file
+      // for a fallback to silently land on.
+      .sort((left, right) => left.path.localeCompare(right.path));
 
     if (videos.length === 0) {
       // Transfer failed (expired/cancelled share, wrong password, dead magnet).
@@ -211,28 +214,56 @@ export async function runMovieAcquisition(input: {
 
     // A resource may flatten into several videos (feature + 花絮/特典/版本/sample).
     // Exactly one is the film. "Largest" is a poor proxy, so when there is more
-    // than one, the AGENT picks the main feature at the best quality; the
-    // workflow keeps that file and DELETES the rest (no leftover junk, no
-    // wasted space — converge on a single highest-quality master).
+    // than one, the AGENT picks the main feature; the workflow keeps that file
+    // and DELETES the rest (no leftover junk, converge on a single master).
     let master = videos[0]!;
     let extras: string[] = [];
     let masterReason = "";
     if (videos.length > 1) {
-      const selection = await input.agents.selectMovieMasterFile({
+      const candidates = videos.map((video) => ({
+        providerFileId: video.providerFileId,
+        name: video.path,
+        sizeBytes: video.sizeBytes,
+      }));
+      let selection = await input.agents.selectMovieMasterFile({
         title: input.title.title,
         year: input.title.year,
-        candidates: videos.map((video) => ({
-          providerFileId: video.providerFileId,
-          name: video.path,
-          sizeBytes: video.sizeBytes,
-        })),
+        candidates,
       });
-      const chosen = videos.find((video) => video.providerFileId === selection.keepFileId);
-      // Degrade gracefully if the agent returns an id not among the staged
-      // videos (hallucination/typo): keep the largest rather than aborting an
-      // acquisition whose resource DID transfer.
-      master = chosen ?? videos[0]!;
-      masterReason = chosen ? selection.reason : `selection id not staged; kept largest`;
+      let chosen = videos.find((video) => video.providerFileId === selection.keepFileId);
+      if (!chosen) {
+        // The agent returned an id not among the staged videos (hallucination/
+        // typo). Do NOT substitute a mechanical pick (largest/first) — re-ask
+        // ONCE with the rejected id as feedback so the AGENT still owns the
+        // choice.
+        selection = await input.agents.selectMovieMasterFile({
+          title: input.title.title,
+          year: input.title.year,
+          candidates,
+          rejectedFileId: selection.keepFileId,
+        });
+        chosen = videos.find((video) => video.providerFileId === selection.keepFileId);
+      }
+      if (!chosen) {
+        // Still invalid after the re-ask. Treat this like a non-materialized
+        // transfer (no mechanical fallback): record evidence and let the next
+        // pass re-plan, rather than guessing the master by size/order.
+        failureEvidence.push({
+          candidateId: candidate.id,
+          candidateTitle: candidate.title,
+          transferStatus: attempt.status,
+          providerMessage: "agent could not select a valid master file among the staged videos",
+          episodesStillMissing: [MOVIE_EPISODE],
+        });
+        auditEvents.push({
+          type: "movie_master_selection_failed",
+          message: `Agent returned an unstaged master id twice for ${input.title.title}; re-planning instead of guessing by size`,
+          data: { candidateId: candidate.id, stagedFileIds: videos.map((video) => video.providerFileId) },
+        });
+        continue;
+      }
+      master = chosen;
+      masterReason = selection.reason;
       extras = videos.filter((video) => video.providerFileId !== master.providerFileId).map((v) => v.providerFileId);
     }
 

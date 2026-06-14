@@ -251,6 +251,12 @@ export class VercelAiAgentNodes implements AgentNodes {
           name: candidate.name,
           sizeBytes: candidate.sizeBytes,
         })),
+        ...(input.rejectedFileId
+          ? {
+              rejectedFileId: input.rejectedFileId,
+              note: `Your previous keepFileId "${input.rejectedFileId}" was NOT among the candidate providerFileIds. Pick a DIFFERENT id that appears EXACTLY in candidates.`,
+            }
+          : {}),
       },
       executor: this.generateStructuredOutput,
     });
