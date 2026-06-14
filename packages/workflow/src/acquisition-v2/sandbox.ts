@@ -102,6 +102,15 @@ export class TaskSandbox {
     return this.storage.listTree({ directoryId: this.stagingDirectoryId });
   }
 
+  /** Read-only list of the wrapper subdirectories currently in staging — the
+   *  source of the handle the agent passes to flattenPack. */
+  async inspectStagingDirs(): Promise<Array<{ id: string; path: string }>> {
+    if (!this.storage || !this.stagingDirectoryId) {
+      throw new Error("SANDBOX: no storage/staging handle configured");
+    }
+    return this.storage.listSubdirectories({ directoryId: this.stagingDirectoryId });
+  }
+
   /** Read-only full raw tree of the scoped target (Season/movie) dir — the
    *  ground truth for what has actually landed. */
   async inspectTargetDir(): Promise<SimTreeFile[]> {
@@ -203,5 +212,24 @@ export class TaskSandbox {
       );
     }
     return { confirmed: input.episodes };
+  }
+
+  /** Peel off a wrapper resource directory after its target files were extracted
+   *  into the Season dir (the original skill's clean flatten — no leftover shell).
+   *  Scope guard: the directory MUST be a subdirectory currently inside THIS
+   *  task's staging handle. Never the staging root, never root/parent/category
+   *  (`_assert_safe_flatten_target` scar). Rereads staging. */
+  async flattenPack(input: { directoryId: string }): Promise<{ removed: string[]; staging: SimTreeFile[] }> {
+    if (!this.storage || !this.stagingDirectoryId) {
+      throw new Error("SANDBOX: no storage/staging handle configured");
+    }
+    const inScope = (await this.storage.listSubdirectories({ directoryId: this.stagingDirectoryId })).some(
+      (dir) => dir.id === input.directoryId,
+    );
+    if (!inScope) {
+      throw new Error(`SANDBOX_FLATTEN_NOT_IN_STAGING: ${input.directoryId} is not a subdir of this task's staging`);
+    }
+    const { removed } = await this.storage.removeDirectory({ directoryId: input.directoryId });
+    return { removed, staging: await this.storage.listTree({ directoryId: this.stagingDirectoryId }) };
   }
 }

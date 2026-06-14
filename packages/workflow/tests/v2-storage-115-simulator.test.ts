@@ -99,6 +99,32 @@ describe("Storage115Simulator — move + name collision", () => {
   });
 });
 
+describe("Storage115Simulator — directory listing + removal (flatten support)", () => {
+  it("lists the nested wrapper subdirectories a pack materialized", async () => {
+    const sim = new Storage115Simulator({ packs: { cand: fullSeasonPack(2) } });
+    const staging = await sim.createDirectory({ name: "staging", parentId: "root" });
+    await sim.transferCandidate({ candidateId: "cand", intoDirectoryId: staging });
+
+    const subdirs = await sim.listSubdirectories({ directoryId: staging });
+
+    expect(subdirs.map((d) => d.path)).toEqual(["[NC-Raws] Show S01"]);
+  });
+
+  it("removes a wrapper directory and everything still nested inside it", async () => {
+    const sim = new Storage115Simulator({
+      packs: { cand: { files: [{ path: "Pack/a.mkv", sizeBytes: 1 }, { path: "Pack/note.txt", sizeBytes: 1 }] } },
+    });
+    const staging = await sim.createDirectory({ name: "staging", parentId: "root" });
+    await sim.transferCandidate({ candidateId: "cand", intoDirectoryId: staging });
+    const packDir = (await sim.listSubdirectories({ directoryId: staging })).find((d) => d.path === "Pack")!;
+
+    await sim.removeDirectory({ directoryId: packDir.id });
+
+    expect(await sim.listTree({ directoryId: staging })).toHaveLength(0);
+    expect(await sim.listSubdirectories({ directoryId: staging })).toHaveLength(0);
+  });
+});
+
 describe("Storage115Simulator — API budget (the 逆鳞)", () => {
   it("fails loud with PAN115_RATE_LIMIT when the per-task API budget is exhausted", async () => {
     // A transfer costs ~1 + one call per file, so a 10-file pack overruns a tiny

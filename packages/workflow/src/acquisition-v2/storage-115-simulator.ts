@@ -49,8 +49,13 @@ export interface StorageV2 {
   createDirectory(input: { name: string; parentId: string }): Promise<string>;
   transferCandidate(input: { candidateId: string; intoDirectoryId: string }): Promise<TransferAttemptResult>;
   listTree(input: { directoryId: string }): Promise<SimTreeFile[]>;
+  /** Recursive list of subdirectories under a directory (path relative to it) —
+   *  the source of the wrapper-dir handle flatten removes. */
+  listSubdirectories(input: { directoryId: string }): Promise<Array<{ id: string; path: string }>>;
   moveFiles(input: { fileIds: string[]; targetDirectoryId: string }): Promise<{ moved: string[] }>;
   deleteFiles(input: { fileIds: string[] }): Promise<{ deleted: string[] }>;
+  /** Remove a directory and everything nested under it (the flatten peel-off). */
+  removeDirectory(input: { directoryId: string }): Promise<{ removed: string[] }>;
 }
 
 export class Storage115Simulator implements StorageV2 {
@@ -164,6 +169,48 @@ export class Storage115Simulator implements StorageV2 {
       moved.push(fileId);
     }
     return { moved };
+  }
+
+  /** Recursive subdirectories of a directory, path-relative to it. */
+  async listSubdirectories(input: { directoryId: string }): Promise<Array<{ id: string; path: string }>> {
+    if (!this.dirs.has(input.directoryId)) {
+      throw new Error(`SIM_DIR_NOT_FOUND: ${input.directoryId}`);
+    }
+    this.spendBudget(1);
+    const out: Array<{ id: string; path: string }> = [];
+    const walk = (dirId: string, prefix: string): void => {
+      for (const dir of this.dirs.values()) {
+        if (dir.parentId === dirId) {
+          const path = `${prefix}${dir.name}`;
+          out.push({ id: dir.id, path });
+          walk(dir.id, `${path}/`);
+        }
+      }
+    };
+    walk(input.directoryId, "");
+    return out.sort((a, b) => a.path.localeCompare(b.path));
+  }
+
+  async removeDirectory(input: { directoryId: string }): Promise<{ removed: string[] }> {
+    if (!this.dirs.has(input.directoryId)) {
+      throw new Error(`SIM_DIR_NOT_FOUND: ${input.directoryId}`);
+    }
+    // Collect the directory + all descendant dirs, then drop their files + the dirs.
+    const toRemove = [input.directoryId, ...(await this.listSubdirectories({ directoryId: input.directoryId })).map((d) => d.id)];
+    const removeSet = new Set(toRemove);
+    const removed: string[] = [];
+    this.spendBudget(toRemove.length);
+    for (const [fileId, file] of this.files) {
+      if (removeSet.has(file.parentId)) {
+        this.files.delete(fileId);
+        removed.push(fileId);
+      }
+    }
+    for (const dirId of toRemove) {
+      this.dirs.delete(dirId);
+      removed.push(dirId);
+    }
+    return { removed };
   }
 
   async deleteFiles(input: { fileIds: string[] }): Promise<{ deleted: string[] }> {
