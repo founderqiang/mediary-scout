@@ -10,8 +10,9 @@ The core shift is:
 > The user should not supervise an agent.
 > The user should express intent, connect their 115 account, and receive results.
 
-The agent should become mostly invisible. It should appear inside the system only as
-a narrow semantic judgment component, not as the main product surface.
+The agent should become mostly invisible to the user. Inside the system, it
+should remain a strong task-scoped actor running inside a system-owned sandbox,
+not the main product surface and not a weak judgment API.
 
 ## Product Thesis
 
@@ -492,13 +493,20 @@ keywords may return errors, and useful resources may hide behind a different
 name. The right design is:
 
 ```text
-strong agent intelligence + narrow workflow authority
+strong agent inside a task sandbox + system-enforced authority boundary
 ```
 
 The agent should be free to reason, recover, try alternate valid keywords,
 compare evidence, reject wrong matches, and explain uncertainty inside its
-bounded task. What it should not be free to do is create directories, transfer
-resources, delete files, or mutate database state directly.
+bounded task. It should also be able to decide scoped action intents: which
+resource to transfer next, which staging files belong in a season, which
+duplicates should be removed, and which episodes are safe to mark obtained.
+
+What it should not be free to do is use raw global authority: arbitrary CIDs,
+raw PanSou indexes/URLs, unrelated directories, root/category folders, or DB
+rows outside the task. The system gives it handles such as `currentStaging`,
+`targetSeason`, `targetMovie`, and `trackedSeason`; the workflow validates that
+every requested action stays inside those handles before execution.
 
 This captures the useful part of the current agent skill while removing long,
 fragile, memory-heavy agent execution.
@@ -524,8 +532,8 @@ The current node set (2026-06-12):
 | `FailureExplainAgent` (future) | Convert failure state into user-facing explanation | workflow state, attempts, missing resources |
 | `NotificationAgent` (future) | Write notification text | verified outcome, remaining missing episodes |
 
-The planning agent is powerful inside its lane but its output passes a hard
-contract before any side effect: the selected snapshot must have been
+The planning agent is powerful inside its task sandbox but its output passes a
+hard contract before any side effect: the selected snapshot must have been
 observed in this run; every candidate in it must receive exactly one
 disposition (selected / rejected / uncertain) — the structured equivalent of
 the skill's full-traversal rule; every selected candidate must map to at
@@ -551,7 +559,7 @@ output before side effects.
 The important principle is ADK-like:
 
 - deterministic orchestration
-- scoped agent nodes
+- task-scoped sandboxed agents
 - explicit state
 - structured input/output
 - validation around every model boundary
@@ -890,11 +898,12 @@ Product lessons:
    episodes will be monitored." The provider failures, keyword recovery, and
    rejected false positives belong in the audit log.
 
-This real run refines the agent-node thesis:
+This real run refines the task-sandbox thesis:
 
-> The model should be powerful inside a narrow responsibility boundary. The
-> workflow should be powerful over side effects. Mixing those two powers is what
-> makes the current skill need so many prompt and code guardrails.
+> The model should be powerful inside a bounded task sandbox. The workflow should
+> be powerful over sandbox boundaries, invariants, and execution gates. Mixing
+> global raw authority with semantic judgment is what makes the current skill
+> need so many prompt and code guardrails.
 
 ## Real Type 3 Run Lessons
 
@@ -1088,28 +1097,39 @@ has broad tool access, so the skill has to repeatedly forbid sampling,
 re-searching, raw URL transfer, wrong-directory flattening, and skipped
 verification.
 
-In the GUI product, the agent nodes should not receive that level of authority
-in the first place.
+In the GUI product, the agent should not receive global raw authority in the
+first place.
 
-A candidate-matching agent should not be able to create folders.
-A coverage agent should not be able to transfer files.
-A dedup agent should not be able to delete files directly.
+This does not mean the agent is reduced to a passive judgment API. It means the
+agent acts inside a task sandbox. It sees the current title/season, DB need
+state, provider snapshots, staging tree, target season directory, and transfer
+results. It can decide semantic action intents such as:
 
-They should only return structured judgment.
-The workflow owns every side effect.
+- transfer this snapshot-bound candidate
+- move these staging files into this canonical `Season N`
+- keep these unresolved staging residues visible
+- delete these snapshot-bound duplicates
+- mark these verified episodes obtained
+
+The workflow owns the sandbox, invariant checks, and execution gate.
+It validates that the intent is scoped to this task, uses current snapshots,
+does not touch root/media/category parents, and has the required post-action
+verification evidence. Then it executes and returns fresh evidence to the
+agent.
 
 That means safety comes from capability design:
 
-- model nodes receive only the context needed for one judgment
-- model nodes return typed decisions, scores, or explanations
-- workflow code performs all writes, transfers, flattening, deletion, and status
-  transitions
+- the agent receives only scoped handles and evidence for this task
+- the agent returns typed action intents, decisions, and explanations
+- workflow code performs exact execution only after sandbox validation
 - each side-effect step re-checks the database state and the allowed directory
   boundary before acting
 
 The agent can still be intelligent, but it is no longer powerful in the
-dangerous sense. It cannot jump to a later step, flatten the wrong directory, or
-start an unapproved transfer, because those actions are not in its tool surface.
+dangerous OpenClaw sense. It cannot jump to a later step, flatten a root/category
+directory, or start an unapproved transfer, because raw authority is not in its
+tool surface. It can still decide whether the scoped staging directory should be
+cleaned, which files should move, and which episodes can be persisted.
 
 This reduces the blast radius of model mistakes and removes much of the prompt
 ceremony that exists only because the current skill must supervise a powerful
@@ -1172,7 +1192,7 @@ strict.
 
 It would become worse if:
 
-- agent nodes begin calling side-effecting tools directly
+- agents gain raw global side-effecting tools instead of scoped sandbox handles
 - the workflow stores vague text instead of typed state
 - "confidence" becomes an excuse to skip verification
 - the UI exposes too much internal trace to normal users
@@ -1181,7 +1201,7 @@ It would become worse if:
 So the answer is:
 
 > Yes, this direction is more elegant and more robust, provided the product keeps
-> agent judgment narrow, typed, validated, and subordinate to the workflow.
+> agent actions scoped, typed, validated, and subordinate to the task sandbox.
 
 ## Stack Implication
 
@@ -1732,8 +1752,9 @@ The executor now also has two structural safety hooks before live 115 writes:
   library scope.
 
 This turns the old skill's prompt discipline around "do not mutate the wrong
-directory" into a program boundary. The agent node can still judge resources,
-but it cannot grant itself broader 115 authority.
+directory" into a program boundary. The agent can still judge resources and
+scoped file operations inside the current task sandbox, but it cannot grant
+itself broader 115 authority or obtain raw parent/root CIDs.
 
 The Next.js worker only enables this path when `MEDIA_TRACK_STORAGE_ADAPTER=115`.
 It still requires `PAN115_COOKIE` plus `MEDIA_TRACK_115_TEST_ROOT_CID` or
@@ -1912,13 +1933,16 @@ For multi-season packages, the safe product flow should be:
 transfer into a scoped staging directory
 -> snapshot the materialized directory tree
 -> parse season and episode hints from folders/files
--> build a deterministic move plan
--> move/copy files into canonical library directories only if confidence is high
+-> give the agent the staging tree, target season handles, parser evidence, and DB need state
+-> agent emits scoped move/keep/delete/mark intents
+-> workflow validates those intents against the sandbox and executes them
 -> otherwise preserve staging state and surface a recoverable workflow result
 ```
 
-This should be a deterministic executor with a narrow agent-judgment node for
-ambiguous classification, not a free-form agent rename operation.
+This should be a sandboxed agent workflow: not free-form raw rename/move/delete,
+and not a deterministic executor that mechanically moves whatever a parser can
+match. The agent owns semantic classification and action intent; the workflow
+owns scope validation and execution.
 
 The canonical target shape can remain:
 
@@ -2038,4 +2062,5 @@ These are product policy questions, not just technical questions.
 The central direction is already clear:
 
 > clawd-media-track should become an unattended media workflow product with
-> deterministic rails and stateless specialist agent nodes.
+> deterministic rails and strong task-scoped agents running inside system-owned
+> sandboxes.
