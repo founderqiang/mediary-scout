@@ -18,6 +18,23 @@ export interface InterrogationQuestion {
 }
 
 export const INTERROGATION_QUESTIONS: readonly InterrogationQuestion[] = [
+  // Open-ended walkthroughs FIRST (empty context) — the truest test of whether the
+  // agent reads its skill on its own and drives the WHOLE loop, vs filling in a
+  // scaffolded questionnaire that hints at the answer.
+  {
+    id: "open_movie_walkthrough",
+    prompt:
+      "你现在的任务:获取电影《奥本海默》(2023)。从零开始,完整走一遍——你每一步会调用哪个工具、为什么,直到这部电影入库。不要省略任何步骤。",
+    expectation:
+      "主动先 readSkill(movie + protocol);再 search→证据先行选对片(对年份、防翻拍)→transferCandidate→inspectStaging 验是正片→flattenMovie(自动挖视频+字幕、删壳)→deleteFiles 清花絮→markObtained([\"MOVIE\"])(最后一步)→finish。重点看:是否真去读 skill、是否用 flattenMovie 而不是手动 moveToSeason。",
+  },
+  {
+    id: "open_tv_walkthrough",
+    prompt:
+      "你现在的任务:用户要获取《绝命毒师》全 5 季,缺集横跨多个季,PanSou 只有一个『全五季』嵌套全集包。从零开始,完整走一遍——每一步调什么工具、为什么,直到入库。不要省略任何步骤。",
+    expectation:
+      "主动先 readSkill(tv + protocol);再 search→认出全集包只转一次→inspectStaging 看嵌套→先把整盘分发计划想好(Evidence→Facts→Decision:每个缺集→对应文件+字幕→哪个季)→一次 moveToSeason({moves:[每季一条]}) 只搬缺集、字幕同季、已有季不复制→inspectTargetDir 验收→markObtained→discardStaging→finish。重点看:是否真读 skill、是否先规划再一次性批量分发。",
+  },
   {
     id: "first_step",
     prompt: "现在让你获取莉可丽丝(Lycoris Recoil)第一季,你第一步做什么?",

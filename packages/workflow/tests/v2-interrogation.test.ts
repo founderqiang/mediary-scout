@@ -16,6 +16,8 @@ describe("§6a interrogation harness (verify '聪明' before spending real money
     const topics = INTERROGATION_QUESTIONS.map((q) => q.id);
     expect(topics).toEqual(
       expect.arrayContaining([
+        "open_movie_walkthrough",
+        "open_tv_walkthrough",
         "first_step",
         "full_season_pack",
         "verify_landed",
@@ -50,6 +52,6 @@ describe("§6a interrogation harness (verify '聪明' before spending real money
 
     expect(transcript).toHaveLength(INTERROGATION_QUESTIONS.length);
     expect(transcript.every((entry) => entry.answer.startsWith("answer "))).toBe(true);
-    expect(transcript[0]!.id).toBe("first_step");
+    expect(transcript[0]!.id).toBe("open_movie_walkthrough"); // open walkthroughs run first (empty context)
   });
 });
