@@ -9,14 +9,22 @@
 
 import { fileURLToPath } from "node:url";
 import path from "node:path";
-import { DatabaseSync } from "node:sqlite";
+import pg from "pg";
+import { loadDotEnv } from "./_lib/pan115-cookie.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const dbPath = process.env.MEDIA_TRACK_WEB_DB_PATH ?? ".media-track-live-series.sqlite";
 const mode = process.argv.includes("--clean") ? "clean" : "seed";
 
+// The web app reads OrbStack Postgres now; the SQLite dev DB has been retired.
+// This seeder writes to the SAME Postgres the notifications UI renders from.
+loadDotEnv();
+const connectionString = process.env.MEDIA_TRACK_POSTGRES_URL?.trim();
+if (!connectionString) {
+  throw new Error("MEDIA_TRACK_POSTGRES_URL is required (the SQLite dev DB has been retired)");
+}
+
 const {
-  SQLiteWorkflowRepository,
+  createPostgresWorkflowRepositorySync,
   createEpisodeStates,
   episodeCode,
   buildSeasonReport,
@@ -25,8 +33,7 @@ const {
   formatReportPushText,
 } = await import(path.join(repoRoot, "packages/workflow/dist/index.js"));
 
-const database = new DatabaseSync(dbPath);
-const repository = new SQLiteWorkflowRepository(database);
+const repository = createPostgresWorkflowRepositorySync({ connectionString });
 
 const PREFIX = "preview_demo_";
 
@@ -96,32 +103,35 @@ async function save({ runId, t, s, eps, kind, trigger, report, createdAt }) {
   });
 }
 
-function clean() {
-  database.exec("PRAGMA foreign_keys = OFF");
-  for (const table of [
-    "notifications",
-    "transfer_attempts",
-    "agent_decisions",
-    "resource_snapshots",
-    "episode_states",
-    "workflow_runs",
-    "tracked_seasons",
-    "media_titles",
-  ]) {
-    const column =
-      table === "episode_states"
-        ? "tracked_season_id"
-        : table === "tracked_seasons" || table === "media_titles" || table === "workflow_runs"
-          ? "id"
-          : "workflow_run_id";
-    database.prepare(`DELETE FROM ${table} WHERE ${column} LIKE ?`).run(`${PREFIX}%`);
+async function clean() {
+  // Trigger lazy schema init so the DELETEs don't error on a fresh DB. The PG
+  // schema has no FK constraints, so deletion order is irrelevant. The 115 cookie
+  // lives in app_settings, which is never touched here.
+  await repository.listNotifications({ limit: 1 });
+  const client = new pg.Client({ connectionString });
+  await client.connect();
+  try {
+    const tables = [
+      ["notifications", "workflow_run_id"],
+      ["transfer_attempts", "workflow_run_id"],
+      ["agent_decisions", "workflow_run_id"],
+      ["resource_snapshots", "workflow_run_id"],
+      ["episode_states", "tracked_season_id"],
+      ["workflow_runs", "id"],
+      ["tracked_seasons", "id"],
+      ["media_titles", "id"],
+    ];
+    for (const [table, column] of tables) {
+      await client.query(`DELETE FROM ${table} WHERE ${column} LIKE $1`, [`${PREFIX}%`]);
+    }
+  } finally {
+    await client.end();
   }
-  database.exec("PRAGMA foreign_keys = ON");
   console.log("cleaned preview_demo_ rows");
 }
 
 if (mode === "clean") {
-  clean();
+  await clean();
 } else {
   const today = new Date();
   const at = (h, m) => new Date(today.getFullYear(), today.getMonth(), today.getDate(), h, m).toISOString();
@@ -229,4 +239,4 @@ if (mode === "clean") {
   console.log("seeded preview_demo_ notifications");
 }
 
-database.close();
+await repository.close();
