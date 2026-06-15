@@ -123,6 +123,9 @@ The move tool is a BATCH plan, not a per-season call. Use it EXACTLY like this:
 ## Messy real packs (lived)
 A single "全X集" pack often has INCONSISTENT, watermarked filenames and MIXED quality — e.g. a real 隐秘的角落 全12集 pack held 第1集–第6集 in proper 蓝光1080P (400MB–1GB) but 尝鲜版07–尝鲜版12End in low-quality preview (~150MB), all sprinkled with a 【site.com】 watermark. You map each to its episode by READING the name ("第3集"=E03, "尝鲜版09"=E09, an "End"/"完" marker = the finale) — no regex, no parser. Keep the ORIGINAL names (never rename). If covering the missing episodes only takes proper-quality files, take those; if the only file for a missing episode is a preview/尝鲜版, take it (coverage now, quality upgrades on a later patrol). When two files cover the same episode, dedup keep-larger.
 
+## On patrol / 补缺 — INSPECT THE LANDING POINT FIRST (§6b#8)
+The missing-episode list is computed from the DB, and the DB can LAG the disk: a prior run may have already placed an episode on 115, or a crash left files mid-flight, yet the DB still says "missing". So whenever you are补缺 (a daily-patrol / type3 run, or any task that hands you "missing" episodes), your FIRST action — BEFORE any searchResources — is inspectTargetDir for each needed season. Any "missing" episode whose video is ALREADY in its season directory: markObtained it straight from that evidence and remove it from your need; do NOT search or transfer for it. Only the episodes genuinely absent from the landing point go on to search/transfer. (Searching PanSou for files you already have on 115 is wasted budget — exactly the over-search to avoid.)
+
 ## Coverage honesty
 Only currently-aired, genuinely-missing episodes are obtainable. Unaired future episodes of the latest ongoing season are NOT missing — leave them; the daily patrol gets them when they air. A truly-missing episode with no covering resource is an honest gap — leave it for the next patrol; never fabricate coverage.
 
