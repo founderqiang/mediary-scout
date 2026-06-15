@@ -62,4 +62,34 @@ describe("RealResourceProviderV2 — pansou → ResourceProviderV2 adapter", () 
     expect(registry.get("cand_a")).toBeDefined();
     expect(registry.get("missing")).toBeUndefined();
   });
+
+  it("filters out known-dead candidates before the agent sees them (#15)", async () => {
+    const snapshotWithDead: ResourceSnapshot = {
+      ...realSnapshot(),
+      candidates: [
+        { ...realSnapshot().candidates[0]!, id: "live", providerPayload: { url: "https://115.com/s/livecode" } },
+        { ...realSnapshot().candidates[0]!, id: "dead_share", providerPayload: { url: "https://115cdn.com/s/deadcode?password=x" } },
+        { ...realSnapshot().candidates[0]!, id: "dead_magnet", type: "magnet", providerPayload: { url: "magnet:?xt=urn:btih:edef9b0fc91c9ccdf5b3e43f6cc5278160e81dd5" } },
+      ],
+    };
+    const deadKeys = ["115:deadcode", "magnet:edef9b0fc91c9ccdf5b3e43f6cc5278160e81dd5"];
+    const deadLinkStore = {
+      recordDeadLink: async () => {},
+      listDeadLinkKeys: async () => deadKeys,
+    };
+    const provider: ResourceProvider = { search: async () => snapshotWithDead };
+    const registry = new CandidateRegistry();
+    const adapter = new RealResourceProviderV2({ provider, registry, workflowRunId: "run-1", deadLinkStore });
+
+    const view = await adapter.search("k1");
+
+    // The agent only ever sees the live candidate.
+    expect(view.candidates.map((c) => c.id)).toEqual(["live"]);
+    // The persisted snapshot reflects the filtered view (no dead candidates), and
+    // the dead ones are never recorded in the registry (the agent can't transfer them).
+    expect(adapter.snapshots()[0]!.candidates.map((c) => c.id)).toEqual(["live"]);
+    expect(registry.get("live")).toBeDefined();
+    expect(registry.get("dead_share")).toBeUndefined();
+    expect(registry.get("dead_magnet")).toBeUndefined();
+  });
 });

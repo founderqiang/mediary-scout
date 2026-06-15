@@ -15,6 +15,7 @@ import {
 } from "./domain.js";
 import { buildMovieReport, formatReportPushText } from "./notification-report.js";
 import type { ResourceProvider, StorageExecutor } from "./ports.js";
+import type { DeadLinkStore } from "./acquisition-v2/dead-links.js";
 import { runAcquisitionV2 } from "./acquisition-v2/orchestrator.js";
 
 function defaultNowIso(): string {
@@ -38,6 +39,7 @@ export interface RunMovieAcquisitionV2Request {
   searchBudget?: number;
   maxSteps?: number;
   preferredLanguage?: string;
+  deadLinkStore?: DeadLinkStore;
   now?: () => string;
 }
 
@@ -72,6 +74,7 @@ export async function runMovieAcquisitionV2(
     ...(request.searchBudget === undefined ? {} : { searchBudget: request.searchBudget }),
     ...(request.maxSteps === undefined ? {} : { maxSteps: request.maxSteps }),
     ...(request.preferredLanguage === undefined ? {} : { preferredLanguage: request.preferredLanguage }),
+    ...(request.deadLinkStore ? { deadLinkStore: request.deadLinkStore } : {}),
   });
 
   // Truth = the AGENT'S coverage (its markObtained), NOT a mechanical file scan

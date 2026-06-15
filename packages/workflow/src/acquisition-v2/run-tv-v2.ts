@@ -7,6 +7,7 @@ import {
   type V2BridgeMode,
   type V2BridgeSeasonIntent,
 } from "./workflow-v2-bridge.js";
+import type { DeadLinkStore } from "./dead-links.js";
 import { runAcquisitionV2Workflow } from "./workflow-v2.js";
 
 function defaultNowIso(): string {
@@ -36,6 +37,7 @@ export interface RunTvAcquisitionV2Request {
   searchBudget?: number;
   maxSteps?: number;
   preferredLanguage?: string;
+  deadLinkStore?: DeadLinkStore;
   now?: () => string;
 }
 
@@ -63,6 +65,7 @@ export async function runTvAcquisitionV2(request: RunTvAcquisitionV2Request): Pr
     ...(request.searchBudget === undefined ? {} : { searchBudget: request.searchBudget }),
     ...(request.maxSteps === undefined ? {} : { maxSteps: request.maxSteps }),
     ...(request.preferredLanguage === undefined ? {} : { preferredLanguage: request.preferredLanguage }),
+    ...(request.deadLinkStore ? { deadLinkStore: request.deadLinkStore } : {}),
   });
 
   return bridgeV2WorkflowToResult({

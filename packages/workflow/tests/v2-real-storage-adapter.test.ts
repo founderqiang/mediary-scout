@@ -23,7 +23,7 @@ class RecordingExecutor implements StorageExecutor {
   transfers: Array<{ workflowRunId: string; directoryId: string; candidateId: string }> = [];
   deletes: Array<{ directoryId: string; fileIds: string[] }> = [];
   removed: string[] = [];
-  constructor(private readonly opts: { status?: TransferAttempt["status"]; tree?: PackageTreeFile[]; removeOk?: boolean } = {}) {}
+  constructor(private readonly opts: { status?: TransferAttempt["status"]; message?: string; tree?: PackageTreeFile[]; removeOk?: boolean } = {}) {}
 
   async createDirectory(input: { name: string; parentId: string }): Promise<string> {
     return `dir_${input.name}`;
@@ -35,8 +35,8 @@ class RecordingExecutor implements StorageExecutor {
       workflowRunId: input.workflowRunId,
       candidateId: input.candidate.id,
       status: this.opts.status ?? "succeeded",
-      providerMessage: "",
-      materializedFileIds: ["f1", "f2"],
+      providerMessage: this.opts.message ?? "",
+      materializedFileIds: this.opts.status && this.opts.status !== "succeeded" ? [] : ["f1", "f2"],
     };
   }
   async listTree(): Promise<PackageTreeFile[]> {
@@ -68,8 +68,21 @@ class RecordingExecutor implements StorageExecutor {
   }
 }
 
-function adapter(executor: StorageExecutor, registry = new CandidateRegistry()) {
-  return { storage: new RealStorageV2({ executor, registry, workflowRunId: "run-7" }), registry };
+class FakeDeadLinkStore {
+  recorded: Array<{ key: string; kind: string; reason: string }> = [];
+  async recordDeadLink(input: { key: string; kind: "pan115" | "magnet"; reason: string }): Promise<void> {
+    this.recorded.push({ key: input.key, kind: input.kind, reason: input.reason });
+  }
+  async listDeadLinkKeys(): Promise<string[]> {
+    return this.recorded.map((r) => r.key);
+  }
+}
+
+function adapter(executor: StorageExecutor, registry = new CandidateRegistry(), deadLinkStore?: FakeDeadLinkStore) {
+  return {
+    storage: new RealStorageV2({ executor, registry, workflowRunId: "run-7", ...(deadLinkStore ? { deadLinkStore } : {}) }),
+    registry,
+  };
 }
 
 describe("RealStorageV2 — StorageExecutor → StorageV2 adapter", () => {
@@ -146,5 +159,46 @@ describe("RealStorageV2 — StorageExecutor → StorageV2 adapter", () => {
     expect(storage.candidateLinkKind("mag")).toBe("magnet");
     expect(storage.candidateLinkKind("weird")).toBe("unknown"); // non-115 share host
     expect(storage.candidateLinkKind("ghost")).toBe("unknown"); // never recorded
+  });
+
+  describe("dead-link recording (#15)", () => {
+    it("records a 115 share that failed loud with a death message", async () => {
+      const store = new FakeDeadLinkStore();
+      const executor = new RecordingExecutor({ status: "failed", message: "链接已过期" });
+      const { storage, registry } = adapter(executor, new CandidateRegistry(), store);
+      registry.record({ ...candidate("share"), providerPayload: { url: "https://115cdn.com/s/sww96353nl6?password=g876" } });
+
+      await storage.transferCandidate({ candidateId: "share", intoDirectoryId: "staging" });
+
+      expect(store.recorded).toEqual([{ key: "115:sww96353nl6", kind: "pan115", reason: "链接已过期" }]);
+    });
+
+    it("records a magnet that did NOT 秒传 (no_target_change), keyed by infohash", async () => {
+      const store = new FakeDeadLinkStore();
+      const executor = new RecordingExecutor({ status: "no_target_change", message: "no target materialized" });
+      const { storage, registry } = adapter(executor, new CandidateRegistry(), store);
+      registry.record({ ...candidate("mag"), type: "magnet", providerPayload: { url: "magnet:?xt=urn:btih:edef9b0fc91c9ccdf5b3e43f6cc5278160e81dd5" } });
+
+      await storage.transferCandidate({ candidateId: "mag", intoDirectoryId: "staging" });
+
+      expect(store.recorded).toEqual([
+        { key: "magnet:edef9b0fc91c9ccdf5b3e43f6cc5278160e81dd5", kind: "magnet", reason: "no target materialized" },
+      ]);
+    });
+
+    it("does NOT record a 任务已存在 magnet (prior good task) nor a successful transfer", async () => {
+      const store = new FakeDeadLinkStore();
+      const dup = new RecordingExecutor({ status: "no_target_change", message: "任务已存在，请勿输入重复的链接地址" });
+      const a = adapter(dup, new CandidateRegistry(), store);
+      a.registry.record({ ...candidate("mag"), type: "magnet", providerPayload: { url: "magnet:?xt=urn:btih:edef9b0fc91c9ccdf5b3e43f6cc5278160e81dd5" } });
+      await a.storage.transferCandidate({ candidateId: "mag", intoDirectoryId: "staging" });
+
+      const ok = new RecordingExecutor({ status: "succeeded" });
+      const b = adapter(ok, new CandidateRegistry(), store);
+      b.registry.record(candidate("share"));
+      await b.storage.transferCandidate({ candidateId: "share", intoDirectoryId: "staging" });
+
+      expect(store.recorded).toEqual([]);
+    });
   });
 });

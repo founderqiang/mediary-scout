@@ -1,6 +1,7 @@
 import type { ResourceSnapshot } from "../domain.js";
 import type { ResourceProvider } from "../ports.js";
 import type { CandidateRegistry } from "./candidate-registry.js";
+import { deadLinkKey, type DeadLinkStore } from "./dead-links.js";
 import type { ResourceProviderV2, ResourceSnapshotV2 } from "./fake-provider.js";
 
 /**
@@ -14,18 +15,24 @@ export interface RealResourceProviderV2Options {
   registry: CandidateRegistry;
   /** Run-scopes content-addressed snapshot ids so re-acquisitions don't collide. */
   workflowRunId: string;
+  /** When set, candidates whose link is known-dead are dropped BEFORE the agent
+   *  sees them (and never recorded/persisted), so it never re-transfers a dead
+   *  resource (#15). */
+  deadLinkStore?: DeadLinkStore;
 }
 
 export class RealResourceProviderV2 implements ResourceProviderV2 {
   private readonly provider: ResourceProvider;
   private readonly registry: CandidateRegistry;
   private readonly workflowRunId: string;
+  private readonly deadLinkStore: DeadLinkStore | undefined;
   private readonly observedSnapshots = new Map<string, ResourceSnapshot>();
 
   constructor(options: RealResourceProviderV2Options) {
     this.provider = options.provider;
     this.registry = options.registry;
     this.workflowRunId = options.workflowRunId;
+    this.deadLinkStore = options.deadLinkStore;
   }
 
   /** The domain snapshots observed this run (deduped by id — content-addressed
@@ -36,16 +43,30 @@ export class RealResourceProviderV2 implements ResourceProviderV2 {
 
   async search(keyword: string): Promise<ResourceSnapshotV2> {
     const snapshot = await this.provider.search({ keyword, workflowRunId: this.workflowRunId });
-    if (!this.observedSnapshots.has(snapshot.id)) {
-      this.observedSnapshots.set(snapshot.id, snapshot);
+    const deadKeys = this.deadLinkStore ? new Set(await this.deadLinkStore.listDeadLinkKeys()) : null;
+    const kept = deadKeys
+      ? snapshot.candidates.filter((candidate) => {
+          const identity = deadLinkKey(String(candidate.providerPayload?.["url"] ?? ""));
+          return !(identity && deadKeys.has(identity.key));
+        })
+      : snapshot.candidates;
+    const dropped = snapshot.candidates.length - kept.length;
+    if (dropped > 0) {
+      console.log(`[dead-link] filtered ${dropped} known-dead candidate(s) from search ${JSON.stringify(keyword)}`);
     }
-    for (const candidate of snapshot.candidates) {
+    // Persist + record only the filtered view — the agent never sees, transfers,
+    // or has persisted the dead candidates.
+    const filteredSnapshot: ResourceSnapshot = { ...snapshot, candidates: kept };
+    if (!this.observedSnapshots.has(snapshot.id)) {
+      this.observedSnapshots.set(snapshot.id, filteredSnapshot);
+    }
+    for (const candidate of kept) {
       this.registry.record(candidate);
     }
     return {
       id: snapshot.id,
       keyword: snapshot.keyword,
-      candidates: snapshot.candidates.map((candidate) => ({
+      candidates: kept.map((candidate) => ({
         id: candidate.id,
         title: candidate.title,
         episodeHints: candidate.episodeHints,

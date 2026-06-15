@@ -85,6 +85,12 @@ const SCHEMA = `
     key text PRIMARY KEY,
     value text NOT NULL
   );
+  CREATE TABLE IF NOT EXISTS dead_links (
+    key text PRIMARY KEY,
+    kind text NOT NULL,
+    reason text NOT NULL,
+    recorded_at text NOT NULL
+  );
 `;
 
 export async function initializeWorkflowPostgresSchema(pool: Pool): Promise<void> {
@@ -293,6 +299,21 @@ export class PostgresWorkflowRepository implements WorkflowRepository {
       "INSERT INTO app_settings (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value",
       [key, value],
     );
+  }
+
+  async recordDeadLink(input: { key: string; kind: "pan115" | "magnet"; reason: string; now?: string }): Promise<void> {
+    await this.ensureSchema();
+    // Idempotent: keep the first record (when it was first proven dead).
+    await this.pool.query(
+      "INSERT INTO dead_links (key, kind, reason, recorded_at) VALUES ($1, $2, $3, $4) ON CONFLICT (key) DO NOTHING",
+      [input.key, input.kind, input.reason, input.now ?? new Date().toISOString()],
+    );
+  }
+
+  async listDeadLinkKeys(): Promise<string[]> {
+    await this.ensureSchema();
+    const result = await this.pool.query("SELECT key FROM dead_links");
+    return result.rows.map((row) => String(row.key));
   }
 
   // ---- private ----

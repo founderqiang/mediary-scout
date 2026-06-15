@@ -10,6 +10,7 @@ import type {
   WorkflowRun,
   WorkflowStatus,
 } from "./domain.js";
+import type { DeadLink, DeadLinkStore } from "./acquisition-v2/dead-links.js";
 
 export interface PersistWorkflowRunSnapshotInput {
   title: MediaTitle;
@@ -63,7 +64,7 @@ export type WorkflowRunReservationResult =
       episodes: EpisodeState[];
     };
 
-export interface WorkflowRepository {
+export interface WorkflowRepository extends DeadLinkStore {
   saveWorkflowRunSnapshot(input: PersistWorkflowRunSnapshotInput): Promise<void>;
   reserveWorkflowRun(input: ReserveWorkflowRunInput): Promise<WorkflowRunReservationResult>;
   getWorkflowRunSnapshot(workflowRunId: string): Promise<PersistedWorkflowRunSnapshot | null>;
@@ -93,12 +94,14 @@ export interface WorkflowRepository {
   /** Generic app settings (e.g. the 115 cookie obtained via QR login). */
   getSetting(key: string): Promise<string | null>;
   setSetting(key: string, value: string): Promise<void>;
+  // recordDeadLink + listDeadLinkKeys come from DeadLinkStore.
 }
 
 export class InMemoryWorkflowRepository implements WorkflowRepository {
   private readonly workflowRuns = new Map<string, PersistWorkflowRunSnapshotInput>();
   private readonly episodesBySeason = new Map<string, EpisodeState[]>();
   private readonly settings = new Map<string, string>();
+  private readonly deadLinks = new Map<string, DeadLink>();
 
   async getSetting(key: string): Promise<string | null> {
     return this.settings.get(key) ?? null;
@@ -106,6 +109,23 @@ export class InMemoryWorkflowRepository implements WorkflowRepository {
 
   async setSetting(key: string, value: string): Promise<void> {
     this.settings.set(key, value);
+  }
+
+  async recordDeadLink(input: { key: string; kind: DeadLink["kind"]; reason: string; now?: string }): Promise<void> {
+    // Idempotent: keep the first record (when it was first proven dead).
+    if (this.deadLinks.has(input.key)) {
+      return;
+    }
+    this.deadLinks.set(input.key, {
+      key: input.key,
+      kind: input.kind,
+      reason: input.reason,
+      recordedAt: input.now ?? new Date().toISOString(),
+    });
+  }
+
+  async listDeadLinkKeys(): Promise<string[]> {
+    return [...this.deadLinks.keys()];
   }
 
   async saveWorkflowRunSnapshot(input: PersistWorkflowRunSnapshotInput): Promise<void> {

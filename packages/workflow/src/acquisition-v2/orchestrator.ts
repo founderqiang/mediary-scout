@@ -3,6 +3,7 @@ import type { AgentDecision, ResourceSnapshot, TransferAttempt } from "../domain
 import type { ResourceProvider, StorageExecutor } from "../ports.js";
 import type { AcquisitionAgentResult } from "./agent-loop.js";
 import { CandidateRegistry } from "./candidate-registry.js";
+import type { DeadLinkStore } from "./dead-links.js";
 import { RealResourceProviderV2 } from "./real-provider-adapter.js";
 import { RealStorageV2 } from "./real-storage-adapter.js";
 import { TaskSandbox } from "./sandbox.js";
@@ -43,6 +44,9 @@ export interface RunAcquisitionV2Request {
   searchBudget?: number;
   maxSteps?: number;
   preferredLanguage?: string;
+  /** Filters known-dead candidates from search results before the agent sees them,
+   *  and records newly-proven-dead links from failed transfers (#15). */
+  deadLinkStore?: DeadLinkStore;
 }
 
 /** The persistable trace of a V2 run, in the same shape the old serial path
@@ -63,11 +67,13 @@ export async function runAcquisitionV2(request: RunAcquisitionV2Request): Promis
     provider: request.provider,
     registry,
     workflowRunId: request.workflowRunId,
+    ...(request.deadLinkStore ? { deadLinkStore: request.deadLinkStore } : {}),
   });
   const storage = new RealStorageV2({
     executor: request.executor,
     registry,
     workflowRunId: request.workflowRunId,
+    ...(request.deadLinkStore ? { deadLinkStore: request.deadLinkStore } : {}),
   });
   const need = request.target.kind === "tv" ? needForTvTarget(request.target) : needForMovie();
   const sandbox = new TaskSandbox({

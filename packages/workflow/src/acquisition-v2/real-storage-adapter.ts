@@ -1,6 +1,7 @@
 import type { TransferAttempt } from "../domain.js";
 import type { StorageExecutor } from "../ports.js";
 import type { CandidateRegistry } from "./candidate-registry.js";
+import { deadLinkKey, deadLinkReason, type DeadLinkStore } from "./dead-links.js";
 import type { SimTreeFile, StorageV2, TransferAttemptResult } from "./storage-115-simulator.js";
 
 /**
@@ -17,18 +18,23 @@ export interface RealStorageV2Options {
   executor: StorageExecutor;
   registry: CandidateRegistry;
   workflowRunId: string;
+  /** When set, a transfer PROVEN dead (115 fail-loud / magnet-no-秒传) records the
+   *  link so future PanSou searches filter it out before the agent sees it (#15). */
+  deadLinkStore?: DeadLinkStore;
 }
 
 export class RealStorageV2 implements StorageV2 {
   private readonly executor: StorageExecutor;
   private readonly registry: CandidateRegistry;
   private readonly workflowRunId: string;
+  private readonly deadLinkStore: DeadLinkStore | undefined;
   private readonly recordedAttempts: TransferAttempt[] = [];
 
   constructor(options: RealStorageV2Options) {
     this.executor = options.executor;
     this.registry = options.registry;
     this.workflowRunId = options.workflowRunId;
+    this.deadLinkStore = options.deadLinkStore;
   }
 
   /** Every transfer attempt this run, for the workflow to persist. */
@@ -44,6 +50,23 @@ export class RealStorageV2 implements StorageV2 {
     if (PAN115_SHARE_URL.test(url)) return "pan115";
     if (/^magnet:/i.test(url)) return "magnet";
     return "unknown";
+  }
+
+  /** Record a link as dead when the attempt PROVES it (conservative — see
+   *  deadLinkReason). No store, unkeyable url, or non-death outcome → no-op. */
+  private async maybeRecordDeadLink(url: unknown, attempt: TransferAttempt): Promise<void> {
+    if (!this.deadLinkStore) {
+      return;
+    }
+    const identity = deadLinkKey(String(url ?? ""));
+    if (!identity) {
+      return;
+    }
+    const reason = deadLinkReason(attempt, identity.kind);
+    if (reason === null) {
+      return;
+    }
+    await this.deadLinkStore.recordDeadLink({ key: identity.key, kind: identity.kind, reason });
   }
 
   async createDirectory(input: { name: string; parentId: string }): Promise<string> {
@@ -66,6 +89,7 @@ export class RealStorageV2 implements StorageV2 {
       candidate,
     });
     this.recordedAttempts.push(attempt);
+    await this.maybeRecordDeadLink(candidate.providerPayload?.["url"], attempt);
     // Only a real materialization counts as success; no_target_change (115 has no
     // cached copy) is a miss the agent must recover from, surfaced as failed +
     // an empty reread.

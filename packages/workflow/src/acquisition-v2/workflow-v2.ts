@@ -1,6 +1,7 @@
 import type { LanguageModel } from "ai";
 import type { ResourceProvider, StorageExecutor } from "../ports.js";
 import { ensureSeasonAcquisitionDirectories, type AcquisitionDirectories } from "./directory-lifecycle.js";
+import type { DeadLinkStore } from "./dead-links.js";
 import { runAcquisitionV2, type AcquisitionV2Outcome } from "./orchestrator.js";
 import { syncSeasonNeed } from "./sync-need.js";
 
@@ -35,6 +36,7 @@ export interface RunAcquisitionV2WorkflowRequest {
   searchBudget?: number;
   maxSteps?: number;
   preferredLanguage?: string;
+  deadLinkStore?: DeadLinkStore;
 }
 
 export interface RunAcquisitionV2WorkflowResult {
@@ -103,6 +105,7 @@ export async function runAcquisitionV2Workflow(
     ...(request.searchBudget === undefined ? {} : { searchBudget: request.searchBudget }),
     ...(request.maxSteps === undefined ? {} : { maxSteps: request.maxSteps }),
     ...(request.preferredLanguage === undefined ? {} : { preferredLanguage: request.preferredLanguage }),
+    ...(request.deadLinkStore ? { deadLinkStore: request.deadLinkStore } : {}),
   });
 
   // Reconcile from the AGENT'S coverage (its markObtained), NOT a 115 re-scan:
